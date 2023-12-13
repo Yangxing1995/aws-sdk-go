@@ -658,15 +658,18 @@ func (ctx *signingCtx) buildCanonicalHeaders(r rule, header http.Header) {
 	headerValues := make([]string, len(headers))
 	for i, k := range headers {
 		if k == "host" {
+			signHost := ""
 			if ctx.Request.Host != "" {
-				headerValues[i] = "host:" + ctx.Request.Host
+				signHost = ctx.Request.Host
 			} else {
-				headerValues[i] = "host:" + ctx.Request.URL.Host
+				signHost = ctx.Request.URL.Host
 			}
 
-			if newHost, ok := GetReplaceHost(headerValues[i]); ok {
-				headerValues[i] = newHost
+			if newHost, ok := GetReplaceHost(signHost); ok {
+				signHost = newHost
 			}
+
+			headerValues[i] = "host:" + signHost
 
 		} else {
 			headerValues[i] = k + ":" +
