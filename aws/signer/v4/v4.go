@@ -3,7 +3,7 @@
 // Provides request signing for request that need to be signed with
 // AWS V4 Signatures.
 //
-// Standalone Signer
+// # Standalone Signer
 //
 // Generally using the signer outside of the SDK should not require any additional
 // logic when using Go v1.5 or higher. The signer does this by taking advantage
@@ -14,10 +14,10 @@
 // The signer will first check the URL.Opaque field, and use its value if set.
 // The signer does require the URL.Opaque field to be set in the form of:
 //
-//     "//<hostname>/<path>"
+//	"//<hostname>/<path>"
 //
-//     // e.g.
-//     "//example.com/some/path"
+//	// e.g.
+//	"//example.com/some/path"
 //
 // The leading "//" and hostname are required or the URL.Opaque escaping will
 // not work correctly.
@@ -66,6 +66,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -88,6 +89,27 @@ const (
 	// emptyStringSHA256 is a SHA256 of an empty string
 	emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
 )
+
+var replaceHosts = struct {
+	sync.RWMutex
+	hosts map[string]string
+}{}
+
+// SetReplaceHosts sets the hosts that should be replaced when signing a request.
+// If a host is not in the map it will not be replaced.
+func SetReplaceHosts(hosts map[string]string) {
+	replaceHosts.Lock()
+	defer replaceHosts.Unlock()
+	replaceHosts.hosts = hosts
+}
+
+// GetReplaceHost gets the host that should be replaced when signing a request.
+func GetReplaceHost(host string) (newHost string, ok bool) {
+	replaceHosts.RLock()
+	defer replaceHosts.RUnlock()
+	newHost, ok = replaceHosts.hosts[host]
+	return newHost, ok
+}
 
 var ignoredHeaders = rules{
 	blacklist{
@@ -641,6 +663,11 @@ func (ctx *signingCtx) buildCanonicalHeaders(r rule, header http.Header) {
 			} else {
 				headerValues[i] = "host:" + ctx.Request.URL.Host
 			}
+
+			if newHost, ok := GetReplaceHost(headerValues[i]); ok {
+				headerValues[i] = newHost
+			}
+
 		} else {
 			headerValues[i] = k + ":" +
 				strings.Join(ctx.SignedHeaderVals[k], ",")
